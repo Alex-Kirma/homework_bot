@@ -8,6 +8,7 @@ import logging
 import sys
 import time
 
+from http import HTTPStatus
 
 from dotenv import load_dotenv
 
@@ -20,7 +21,7 @@ RETRY_TIME = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
-HOMEWORK_STATUSES = {
+VERDICTS_STATUSES = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
@@ -40,9 +41,8 @@ def send_message(bot, message):
     """Отправка сообщений ботом в телеграм."""
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-    except telegram.error as error:
+    except telegram.error:
         logger.error('Не удалоcь отправить сообщение')
-        raise telegram.error(f'Ошибка при отправке сообщения: {error}')
     else:
         logger.info('Сообщение успешно отправленно!')
 
@@ -57,23 +57,22 @@ def get_api_answer(current_timestamp):
             headers=HEADERS,
             params=params
         )
-        answer = homework_statuses.status_code
-        if answer != 200:
-            logger.error(f'Недоступен эндпоинт, код ответа {answer}')
+        status_code = homework_statuses.status_code
+        if status_code != HTTPStatus.OK:
+            logger.error(f'Недоступен эндпоинт, код ответа {status_code}')
             raise requests.exceptions.HTTPError('Ошибка доступа к эндпоинту')
+        return homework_statuses.json()
     except Exception as error:
         logger.error(f'Сбой при доступе к энд поинту, ошибка: {error}')
         raise Exception(f'Возникло исключение, ошибка: {error}')
-    else:
-        return homework_statuses.json()
 
 
 def check_response(response):
     """Проверка статуса запроса homeworks."""
     try:
         homeworks = response['homeworks']
-        type_homeworks = type(homeworks)
-        if type_homeworks != list:
+        type_homeworks = isinstance(homeworks, list)
+        if not type_homeworks:
             logger.error(f'В ответе API пришел не список {type_homeworks}')
             raise TypeError('Ожидаемый ответ API не список')
     except KeyError as error:
@@ -86,13 +85,16 @@ def parse_status(homework):
     """Парсинг списка домашних заданий."""
     homework_name = homework['homework_name']
     homework_status = homework['status']
-    if homework_status in HOMEWORK_STATUSES:
-        logger.debug('Статус работы обновлен')
-    elif homework_status not in HOMEWORK_STATUSES:
-        message = 'Такого статуса не существует'
-        logger.error(message)
-        send_message(message)
-    verdict = HOMEWORK_STATUSES[homework_status]
+    try:
+        if homework_status in VERDICTS_STATUSES:
+            logger.debug('Статус работы обновлен')
+        else:
+            if homework_status not in VERDICTS_STATUSES:
+                logger.error('Такого статуса не существует')
+    except KeyError as error:
+        logger.error('Ошибка ключа')
+        raise KeyError(f'Ключ не найден, ошибка: {error}')
+    verdict = VERDICTS_STATUSES[homework_status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
@@ -119,7 +121,7 @@ def main():
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
-
+    error_message = ''
     while True:
         try:
             response = get_api_answer(current_timestamp)
@@ -131,9 +133,8 @@ def main():
             time.sleep(RETRY_TIME)
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
-            send_message(bot, message)
-        else:
-            time.sleep(RETRY_TIME)
+            if message != error_message:
+                send_message(bot, message)
 
 
 if __name__ == '__main__':
