@@ -83,17 +83,17 @@ def check_response(response):
 
 def parse_status(homework):
     """Парсинг списка домашних заданий."""
-    homework_name = homework['homework_name']
-    homework_status = homework['status']
     try:
-        if homework_status in VERDICTS_STATUSES:
-            logger.debug('Статус работы обновлен')
-        else:
-            if homework_status not in VERDICTS_STATUSES:
-                logger.error('Такого статуса не существует')
+        homework_name = homework['homework_name']
+        homework_status = homework['status']
     except KeyError as error:
         logger.error('Ошибка ключа')
         raise KeyError(f'Ключ не найден, ошибка: {error}')
+    if homework_status in VERDICTS_STATUSES:
+        logger.debug('Статус работы обновлен')
+    else:
+        if homework_status not in VERDICTS_STATUSES:
+            logger.error('Такого статуса не существует')
     verdict = VERDICTS_STATUSES[homework_status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
@@ -135,6 +135,7 @@ def main():
             message = f'Сбой в работе программы: {error}'
             if message != error_message:
                 send_message(bot, message)
+                error_message == message
 
 
 if __name__ == '__main__':
