@@ -136,8 +136,8 @@ def main():
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             if message != error_message:
-                send_message(bot, message)
-            if send_message():
+                test_message = send_message(bot, message)
+            if test_message:
                 error_message = message
 
 
